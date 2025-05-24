@@ -28,10 +28,10 @@ public class TicketsView {
         Button addTicketButton = new Button("Agregar Ticket");
         Button updateTicketButton = new Button("Actualizar Ticket");
         Button deleteTicketButton = new Button("Eliminar Ticket");
-        Button processTicketButton = new Button("Procesar Ticket"); // Botón para procesar tickets desde la cola
-        Button undoChangeButton = new Button("Deshacer Cambio");   // Botón para deshacer cambios desde la pila
-        Button changeStatusButton = new Button("Cambiar Estado");  // Botón para cambiar el estado del ticket
-        Button backButton = new Button("Regresar al Menú de Ingreso"); // Botón para regresar al menú de ingreso
+        Button processTicketButton = new Button("Procesar Ticket");
+        Button undoChangeButton = new Button("Deshacer Cambio");
+        Button changeStatusButton = new Button("Cambiar Estado");
+        Button backButton = new Button("Regresar al Menú de Ingreso");
 
         // Configurar columnas de la tabla
         TableColumn<Ticket, Integer> idColumn = new TableColumn<>("ID");
@@ -46,7 +46,7 @@ public class TicketsView {
         TableColumn<Ticket, String> userColumn = new TableColumn<>("Usuario");
         userColumn.setCellValueFactory(data -> data.getValue().userProperty());
 
-        TableColumn<Ticket, String> statusColumn = new TableColumn<>("Estado"); // Nueva columna para el estado
+        TableColumn<Ticket, String> statusColumn = new TableColumn<>("Estado");
         statusColumn.setCellValueFactory(data -> data.getValue().statusProperty());
 
         ticketTable.getColumns().addAll(idColumn, titleColumn, descriptionColumn, userColumn, statusColumn);
@@ -57,9 +57,9 @@ public class TicketsView {
 
         // Restricciones según el rol
         if (!LoginView.isAdmin()) {
-            deleteTicketButton.setDisable(true); // Solo el administrador puede eliminar tickets
-            processTicketButton.setDisable(true); // Solo el administrador puede procesar tickets
-            undoChangeButton.setDisable(true);   // Solo el administrador puede deshacer cambios
+            deleteTicketButton.setDisable(true);
+            processTicketButton.setDisable(true);
+            undoChangeButton.setDisable(true);
         }
 
         // Acción para agregar un nuevo ticket
@@ -70,19 +70,28 @@ public class TicketsView {
             titleDialog.setContentText("Título del ticket:");
 
             titleDialog.showAndWait().ifPresent(title -> {
+                if (title.trim().isEmpty()) {
+                    new Alert(Alert.AlertType.WARNING, "El título no puede estar vacío.").show();
+                    return;
+                }
                 TextInputDialog descriptionDialog = new TextInputDialog();
                 descriptionDialog.setTitle("Nuevo Ticket");
                 descriptionDialog.setHeaderText("Agregar un nuevo ticket");
                 descriptionDialog.setContentText("Descripción del ticket:");
 
                 descriptionDialog.showAndWait().ifPresent(description -> {
+                    if (description.trim().isEmpty()) {
+                        new Alert(Alert.AlertType.WARNING, "La descripción no puede estar vacía.").show();
+                        return;
+                    }
                     saveTicketToDatabase(title, description, LoginView.getLoggedInUserId());
                     tickets.clear();
                     tickets.addAll(loadTicketsFromDatabase());
 
-                    // Agregar el ticket a la cola
-                    Ticket newTicket = new Ticket(0, title, description, "Usuario actual", "Abierto");
+                    // Agregar el ticket a la cola con el nombre correcto del usuario
+                    Ticket newTicket = new Ticket(0, title, description, getLoggedInUserName(), "Abierto");
                     ticketQueue.add(newTicket);
+                    new Alert(Alert.AlertType.INFORMATION, "Ticket agregado correctamente.").show();
                     System.out.println("Ticket agregado a la cola: " + title);
                 });
             });
@@ -91,82 +100,89 @@ public class TicketsView {
         // Acción para procesar un ticket desde la cola
         processTicketButton.setOnAction(e -> {
             if (!ticketQueue.isEmpty()) {
-                Ticket nextTicket = ticketQueue.poll(); // Sacar el primer ticket de la cola
+                Ticket nextTicket = ticketQueue.poll();
+                new Alert(Alert.AlertType.INFORMATION, "Procesando ticket: " + nextTicket.getTitle()).show();
                 System.out.println("Procesando ticket: " + nextTicket.getTitle());
             } else {
+                new Alert(Alert.AlertType.INFORMATION, "No hay tickets en la cola.").show();
                 System.out.println("No hay tickets en la cola.");
             }
         });
 
-// Acción para actualizar un ticket
-updateTicketButton.setOnAction(e -> {
-    Ticket selectedTicket = ticketTable.getSelectionModel().getSelectedItem();
-    if (selectedTicket != null) {
-        // Verificar si el ticket está cerrado
-        if (selectedTicket.getStatus().equalsIgnoreCase("Cerrado")) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "No puedes editar un ticket que ya está cerrado.");
-            alert.show();
-            return;
-        }
+        // Acción para actualizar un ticket
+        updateTicketButton.setOnAction(e -> {
+            Ticket selectedTicket = ticketTable.getSelectionModel().getSelectedItem();
+            if (selectedTicket != null) {
+                // Verificar si el ticket está cerrado
+                if (selectedTicket.getStatus().equalsIgnoreCase("Cerrado")) {
+                    new Alert(Alert.AlertType.ERROR, "No puedes editar un ticket que ya está cerrado.").show();
+                    return;
+                }
 
-        // Verificar si el usuario actual es el propietario del ticket
-        if (!LoginView.isAdmin() && !selectedTicket.getUser().equals(getLoggedInUserName())) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "No puedes editar tickets de otros usuarios.");
-            alert.show();
-            return;
-        }
+                // Verificar si el usuario actual es el propietario del ticket
+                if (!LoginView.isAdmin() && !selectedTicket.getUser().equals(getLoggedInUserName())) {
+                    new Alert(Alert.AlertType.ERROR, "No puedes editar tickets de otros usuarios.").show();
+                    return;
+                }
 
-        // Mostrar cuadro de diálogo para actualizar la descripción
-        TextInputDialog updateDialog = new TextInputDialog(selectedTicket.getDescription());
-        updateDialog.setTitle("Actualizar Ticket");
-        updateDialog.setHeaderText("Actualizar descripción del ticket");
-        updateDialog.setContentText("Nueva descripción:");
+                // Mostrar cuadro de diálogo para actualizar la descripción
+                TextInputDialog updateDialog = new TextInputDialog(selectedTicket.getDescription());
+                updateDialog.setTitle("Actualizar Ticket");
+                updateDialog.setHeaderText("Actualizar descripción del ticket");
+                updateDialog.setContentText("Nueva descripción:");
 
-        updateDialog.showAndWait().ifPresent(newDescription -> {
-            // Registrar el cambio en el historial
-            ticketHistory.push("Descripción anterior: " + selectedTicket.getDescription());
-            updateTicketInDatabase(selectedTicket.getId(), newDescription);
-            tickets.clear();
-            tickets.addAll(loadTicketsFromDatabase());
-            System.out.println("Cambio registrado en el historial.");
+                updateDialog.showAndWait().ifPresent(newDescription -> {
+                    if (newDescription.trim().isEmpty()) {
+                        new Alert(Alert.AlertType.WARNING, "La descripción no puede estar vacía.").show();
+                        return;
+                    }
+                    if (newDescription.equals(selectedTicket.getDescription())) {
+                        new Alert(Alert.AlertType.INFORMATION, "La descripción no ha cambiado.").show();
+                        return;
+                    }
+                    // Registrar el cambio en el historial (anterior y nueva)
+                    ticketHistory.push("Descripción anterior: " + selectedTicket.getDescription() +
+                                       " | Nueva descripción: " + newDescription);
+                    updateTicketInDatabase(selectedTicket.getId(), newDescription);
+                    tickets.clear();
+                    tickets.addAll(loadTicketsFromDatabase());
+                    new Alert(Alert.AlertType.INFORMATION, "Ticket actualizado correctamente.").show();
+                    System.out.println("Cambio registrado en el historial.");
+                });
+            } else {
+                new Alert(Alert.AlertType.WARNING, "Por favor, selecciona un ticket para actualizar.").show();
+            }
         });
-    } else {
-        Alert alert = new Alert(Alert.AlertType.WARNING, "Por favor, selecciona un ticket para actualizar.");
-        alert.show();
-    }
-});
 
         // Acción para cambiar el estado del ticket
         changeStatusButton.setOnAction(e -> {
             Ticket selectedTicket = ticketTable.getSelectionModel().getSelectedItem();
             if (selectedTicket != null) {
-                // Mostrar un cuadro de diálogo para seleccionar el nuevo estado
                 ChoiceDialog<String> dialog = new ChoiceDialog<>("En Proceso", "Abierto", "En Proceso", "Cerrado");
                 dialog.setTitle("Cambiar Estado");
                 dialog.setHeaderText("Cambiar el estado del ticket");
                 dialog.setContentText("Selecciona el nuevo estado:");
 
                 dialog.showAndWait().ifPresent(newStatus -> {
-                    // Actualizar el estado en la base de datos
                     updateTicketStatusInDatabase(selectedTicket.getId(), newStatus);
-
-                    // Actualizar el estado en la tabla
                     selectedTicket.setStatus(newStatus);
-                    ticketTable.refresh(); // Refrescar la tabla para mostrar el cambio
+                    ticketTable.refresh();
+                    new Alert(Alert.AlertType.INFORMATION, "Estado del ticket actualizado a: " + newStatus).show();
                     System.out.println("Estado del ticket actualizado a: " + newStatus);
                 });
             } else {
-                Alert alert = new Alert(Alert.AlertType.WARNING, "Por favor, selecciona un ticket para cambiar su estado.");
-                alert.show();
+                new Alert(Alert.AlertType.WARNING, "Por favor, selecciona un ticket para cambiar su estado.").show();
             }
         });
 
         // Acción para deshacer el último cambio
         undoChangeButton.setOnAction(e -> {
             if (!ticketHistory.isEmpty()) {
-                String lastChange = ticketHistory.pop(); // Sacar el último cambio de la pila
+                String lastChange = ticketHistory.pop();
+                new Alert(Alert.AlertType.INFORMATION, "Cambio deshecho:\n" + lastChange).show();
                 System.out.println("Cambio deshecho: " + lastChange);
             } else {
+                new Alert(Alert.AlertType.INFORMATION, "No hay cambios para deshacer.").show();
                 System.out.println("No hay cambios para deshacer.");
             }
         });
@@ -177,6 +193,9 @@ updateTicketButton.setOnAction(e -> {
             if (selectedTicket != null) {
                 deleteTicketFromDatabase(selectedTicket.getId());
                 tickets.remove(selectedTicket);
+                new Alert(Alert.AlertType.INFORMATION, "Ticket eliminado correctamente.").show();
+            } else {
+                new Alert(Alert.AlertType.WARNING, "Por favor, selecciona un ticket para eliminar.").show();
             }
         });
 
@@ -208,7 +227,7 @@ updateTicketButton.setOnAction(e -> {
                 String title = resultSet.getString("titulo");
                 String description = resultSet.getString("descripcion");
                 String userName = resultSet.getString("usuario");
-                String status = resultSet.getString("estado"); // Cargar el estado del ticket
+                String status = resultSet.getString("estado");
                 tickets.add(new Ticket(id, title, description, userName, status));
             }
         } catch (SQLException e) {
@@ -225,8 +244,8 @@ updateTicketButton.setOnAction(e -> {
 
             statement.setString(1, title);
             statement.setString(2, description);
-            statement.setString(3, "Abierto"); // Estado inicial
-            statement.setInt(4, userId); // ID del usuario logueado
+            statement.setString(3, "Abierto");
+            statement.setInt(4, userId);
             statement.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error al guardar el ticket: " + e.getMessage());

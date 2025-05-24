@@ -48,6 +48,7 @@ public class LoginView {
 
                 passwordDialog.showAndWait().ifPresent(password -> {
                     if (validateAdminPassword(password)) {
+                        new Alert(Alert.AlertType.INFORMATION, "¡Bienvenido, administrador!").show();
                         stage.setScene(new Scene(new DashboardView(stage).getView(), 600, 400));
                     } else {
                         Alert alert = new Alert(Alert.AlertType.ERROR, "Contraseña incorrecta.");
@@ -56,6 +57,7 @@ public class LoginView {
                 });
             } else {
                 // Iniciar sesión como usuario normal
+                new Alert(Alert.AlertType.INFORMATION, "¡Bienvenido! Has iniciado sesión correctamente.").show();
                 stage.setScene(new Scene(new DashboardView(stage).getView(), 600, 400));
             }
         });
@@ -68,15 +70,24 @@ public class LoginView {
             nameDialog.setContentText("Nombre del usuario:");
 
             nameDialog.showAndWait().ifPresent(name -> {
+                if (name.trim().isEmpty()) {
+                    new Alert(Alert.AlertType.WARNING, "El nombre no puede estar vacío.").show();
+                    return;
+                }
                 TextInputDialog emailDialog = new TextInputDialog();
                 emailDialog.setTitle("Nuevo Usuario");
                 emailDialog.setHeaderText("Agregar un nuevo usuario");
                 emailDialog.setContentText("Correo del usuario:");
 
                 emailDialog.showAndWait().ifPresent(email -> {
+                    if (email.trim().isEmpty()) {
+                        new Alert(Alert.AlertType.WARNING, "El correo no puede estar vacío.").show();
+                        return;
+                    }
                     addNewUserToDatabase(name, email);
                     userComboBox.getItems().clear();
                     userComboBox.getItems().addAll(loadUsersFromDatabase());
+                    new Alert(Alert.AlertType.INFORMATION, "Usuario agregado correctamente.").show();
                 });
             });
         });
